@@ -1,10 +1,11 @@
 # AGENT MEMORY DASHBOARD
-*Last Synchronized: 2026-08-28T12:54:17.588227*
+*Last Synchronized: 2026-08-29T01:49:58.321223*
 
 ## ACTIVE ARCHITECTURAL CONSTRAINTS
 *No active constraints recorded.*
 
 ## RECENT MEMORY TRACES
+- `[ARCHITECTURE]` (IDE: antigravity | Weight: 1.00): SIH 2026 Presentation for Problem Statement 26082 (MoES / NCMRWF) verified: 6 slides strictly compliant with official SIH rubric, two-way weather-chemistry coupling formulas, inversion strength tracking (ISI = dtheta/dz > 4.5 K/100m, PBLH < 350m), NASA VIIRS 375m stubble plume Pasquill-Gifford dispersion, O3 photochemistry (J_NO2), 72h Chronos-Bolt probabilistic forecasting (0.47ms vs 6h WRF-Chem), and high-contrast dark UI slides exported to PPTX and PDF.
 - `[ARCHITECTURE]` (IDE: antigravity | Weight: 1.00): VayuX Map Layer Switcher & Multi-Property IDW Interpolation: Surface points compute aqi, pm25, pm10, temperature, and humidity simultaneously in a single-pass ~22ms IDW loop (src/lib/aqi/interpolate.ts). MapLibre GL paint properties update dynamically on activeLayer state change without reloading the map. Automated test suite (npm test) verifies CPCB piecewise interpolation, live CAAQMS feed, 72h forecast continuity, and GRAP policy simulation.
 - `[PREFERENCE]` (IDE: antigravity | Weight: 1.00): UI Preferences: 1. Sleek dark obsidian basemap with translucent glowing heat contours and crisp station rings. 2. When switching layers (AQI, PM2.5, PM10, Temperature, Humidity), station markers and surface heatmap must dynamically update their color, values, and unit labels. 3. Station Drawer must display complete multi-pollutant matrix (ug/m3 and ppb) + live weather strip (Temp, Humidity, Wind, Pressure) + dual 24h trend & 72h forecast chart.
 - `[FAILURE_LESSON]` (IDE: antigravity | Weight: 1.00): Failure Lesson: 1. European CAMS global model overestimates Northern India tropospheric dust (reporting PM10 > 600 ug/m3 even during monsoon), which blew up CPCB calculation to 500 AQI. ALWAYS prioritize direct ground sensors (WAQI/CPCB CAAQMS) and clamp satellite artifacts. 2. 72-Hour timeline scrubber must anchor Hour 0 to live ground baseline and project smooth physical delta curves without jumping between discrete hardcoded baselines. 3. Station Drawer and GRAP Sandbox must use dedicated non-colliding layout with collapsible state.

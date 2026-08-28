@@ -8,9 +8,10 @@ import styles from "./map.module.css";
 interface ForecastTimelineProps {
   onHourChange?: (hourOffset: number, simulatedMultiplier: number, aqi: number) => void;
   baselineAqi: number;
+  stationName?: string;
 }
 
-export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimelineProps) {
+export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: ForecastTimelineProps) {
   const [selectedHour, setSelectedHour] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [forecastStart] = useState<Date>(() => new Date());
@@ -22,18 +23,13 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
 
   useEffect(() => {
     async function loadForecast() {
+      if (!baselineAqi || baselineAqi <= 0) return;
       try {
         const res = await fetch("/api/forecast", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            history_pm25: [
-              Math.max(30, baselineAqi * 0.7),
-              Math.max(30, baselineAqi * 0.72),
-              Math.max(30, baselineAqi * 0.75),
-              Math.max(30, baselineAqi * 0.78),
-              Math.max(30, baselineAqi * 0.8),
-            ],
+            baseline_aqi: baselineAqi,
           }),
         });
         if (res.ok) {
@@ -43,44 +39,51 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
           }
         }
       } catch {
+        // Handled via phase-normalized mathematical diurnal fallback
       }
     }
     loadForecast();
   }, [baselineAqi]);
 
+  const hourlyData = useMemo(() => {
+    const start = forecastStart || new Date();
+    const currentHourOfDay = start.getHours();
+    const basePhase = ((currentHourOfDay - 6) * Math.PI) / 12;
+    const baseSin = Math.sin(basePhase);
 
-  const hourlyData = useMemo(() => Array.from({ length: 73 }, (_, hour) => {
-    if (!forecastStart) return { hour, label: "", aqi: baselineAqi, multiplier: 1 };
+    return Array.from({ length: 73 }, (_, hour) => {
+      const forecastTime = new Date(start);
+      forecastTime.setHours(forecastTime.getHours() + hour);
+      const timeStr = forecastTime.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
+      const dayStr = forecastTime.toLocaleDateString("en-IN", { weekday: "short" });
+      const label = hour === 0 ? "Now" : `${dayStr} · ${timeStr}`;
 
-    const forecastTime = new Date(forecastStart);
-    forecastTime.setHours(forecastTime.getHours() + hour);
-    const timeStr = forecastTime.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
-    const dayStr = forecastTime.toLocaleDateString("en-IN", { weekday: "short" });
-    const label = hour === 0 ? "Now" : `${dayStr} · ${timeStr}`;
+      if (hour === 0) return { hour, label, aqi: baselineAqi, multiplier: 1.0 };
 
-    if (hour === 0) return { hour, label, aqi: baselineAqi, multiplier: 1 };
+      // forecastAqiSeries contains 72 hourly forecast steps (index 0 = hour 1)
+      const modelAqi = forecastAqiSeries[hour - 1];
+      let predictedAqi = baselineAqi;
 
-    const modelAqi = forecastAqiSeries[hour];
-    let predictedAqi = baselineAqi;
+      if (typeof modelAqi === "number" && Number.isFinite(modelAqi) && modelAqi > 0) {
+        predictedAqi = modelAqi;
+      } else {
+        const hourOfDay = forecastTime.getHours();
+        const hourPhase = ((hourOfDay - 6) * Math.PI) / 12;
+        const diurnalDiff = Math.sin(hourPhase) - baseSin;
+        const targetAqi = Math.round(baselineAqi + 22.0 * diurnalDiff);
+        predictedAqi = Math.max(20, Math.min(500, targetAqi));
+      }
 
-    if (modelAqi !== undefined) {
-      predictedAqi = modelAqi;
-    } else {
-      const hourOfDay = forecastTime.getHours();
-      const diurnalFactor = 1 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
-      predictedAqi = Math.round(baselineAqi * diurnalFactor);
-    }
+      const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
 
-    const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
-
-    return {
-      hour,
-      label,
-      aqi: Math.min(Math.max(predictedAqi, 20), 500),
-      multiplier,
-    };
-  }), [baselineAqi, forecastStart, forecastAqiSeries]);
-
+      return {
+        hour,
+        label,
+        aqi: Math.min(Math.max(predictedAqi, 20), 500),
+        multiplier,
+      };
+    });
+  }, [baselineAqi, forecastStart, forecastAqiSeries]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -146,7 +149,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
   }, [isPlaying, selectedHour]);
 
   const trendLabel = selectedHour === 0
-    ? "Live baseline"
+    ? (stationName ? `Station baseline: ${stationName.split(",")[0]}` : "Regional baseline (Delhi NCR)")
     : delta === 0
       ? "Steady"
       : `${delta > 0 ? "↑" : "↓"} ${Math.abs(delta)} vs prior hour`;
@@ -165,7 +168,9 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
         <div className={styles.forecastIdentity}>
           <span className={styles.forecastPulse} aria-hidden="true" />
           <div>
-            <span className={styles.forecastEyebrow}>72-hour outlook</span>
+            <span className={styles.forecastEyebrow}>
+              {stationName ? `72h Outlook · ${stationName.split(",")[0]}` : "72h Regional Outlook (Delhi NCR)"}
+            </span>
             <strong>{selectedHour === 0 ? "Live conditions" : currentItem.label}</strong>
           </div>
         </div>

@@ -1,29 +1,43 @@
 # VayuX (वायुX): Domain Context & Architecture Specification
 
-**Domain**: Air Pollution–Weather Coupled Forecasting System (Delhi NCR Focus)  
+**Domain**: Two-Way Weather–Chemistry Coupled Forecasting & Policy Simulation Platform (Delhi NCR Focus)  
 **Hackathon**: Smart India Hackathon 2026 (Ministry of Environment, Forest and Climate Change)  
-**Repository**: https://github.com/sadSanta-07/Vayux
+**Repository**: https://github.com/sadSanta-07/Vayux  
 
 ---
 
-## 1. Domain Terminology & Invariants
+## 1. Domain Terminology & Atmospheric Invariants
 
-- **CAAQMS**: Continuous Ambient Air Quality Monitoring Stations (105+ official stations across Delhi NCR monitored by CPCB, DPCC, HSPCB, and UPPCB).
-- **CPCB AQI Standard**: Indian National Air Quality Index calculation using sub-index piecewise linear interpolation for PM2.5, PM10, NO2, SO2, CO, O3, NH3.
-- **Atmospheric Boundary Layer (PBLH)**: Planetary Boundary Layer Height. During winter inversion episodes, PBLH collapses from ~1500m down to <350m, creating an airtight trapping ceiling over the capital.
+- **CAAQMS**: Continuous Ambient Air Quality Monitoring Stations (105+ active stations across Delhi, Noida, Gurugram, Ghaziabad, and Faridabad monitored by CPCB, DPCC, HSPCB, and UPPCB).
+- **CPCB NAQI Standard**: Indian National Air Quality Index calculation utilizing piecewise linear sub-index interpolation across 8 criteria pollutants ($PM_{2.5}, PM_{10}, NO_2, SO_2, CO, O_3, NH_3, Pb$). The headline index is strictly determined by $\max(I_{p1}, I_{p2}, \dots, I_{pn})$ with authentic Indian category breakpoints ($0\text{-}50$ Good, $51\text{-}100$ Satisfactory, $101\text{-}200$ Moderate, $201\text{-}300$ Poor, $301\text{-}400$ Very Poor, $401\text{-}500$ Severe).
 - **Two-Way Weather–Chemistry Coupling**:
-  - *Chemistry -> Meteorology*: Aerosol optical depth blocks incoming solar radiation via the Beer-Lambert law (I(z)=I_0 e^{-\\alpha \\cdot \\text{PM}_{2.5}}), suppressing surface heating by up to -66.7%.
-  - *Meteorology -> Chemistry*: Surface cooling intensifies the temperature inversion lid, compressing the mixing volume and dramatically escalating ground particulate concentrations.
-- **Foundation Forecaster**: Zero-shot time-series forecasting powered by amazon/chronos-bolt-tiny coupled with a physical residual adapter estimating p10, p50, p90 predictive quantiles across a 72-hour future horizon.
-- **VayuVani (वायुवाणी)**: Multimodal ambient voice co-pilot streaming bidirectional 16kHz audio over WebSockets using Google's gemini-2.5-flash-native-audio-latest engine.
+  - *Chemistry $\to$ Meteorology (Beer-Lambert Solar Extinction)*: Downwelling solar radiation attenuation ($I(z) = I_0 e^{-\alpha \cdot \text{PM}_{2.5}}$) suppresses surface radiative heating by up to $-66.7\%$.
+  - *Meteorology $\to$ Chemistry (Nocturnal Inversion & Boundary Layer Compression)*: Radiative surface cooling collapses the Planetary Boundary Layer Height ($\text{PBLH} < 305\,\text{m}$), trapping ground emissions in an airtight surface mixing volume and exponentially magnifying nocturnal particulate density.
+- **Zero-Shot Foundation Forecaster**: 72-hour probabilistic quantile forecasting ($p10, p50, p90$) powered by Amazon's `amazon/chronos-bolt-tiny` zero-shot time-series foundation model integrated with a custom `PhysicsResidualAdapter`.
+- **$C^0$ Continuity Anchoring**: Strict mathematical trajectory calibration anchoring the foundation model forecast curve directly to Hour 0 (`Now`) live observations, preventing step discontinuities ($|\Delta \text{AQI}| \le 15\,\text{AQI/hr}$).
+- **VayuVani (वायुवाणी)**: Ambient real-time voice intelligence co-pilot streaming continuous bi-directional 16kHz audio in $\to$ 24kHz raw PCM speech out over WebSockets (`/ws/jarvis-live`) powered by Google's `gemini-2.5-flash-native-audio-latest`. Backed by full multi-turn conversational persistence, dynamic station lookups, 72h temperature trajectories, NASA VIIRS active fire hotspots, and live web search environmental intelligence.
+- **GRAP Counterfactual Policy Sandbox**: Real-time mass-balance source apportionment simulator modeling vehicular Odd-Even controls, agricultural stubble fire bans, and industrial dust suppression with secondary boundary layer feedback.
 
 ---
 
-## 2. Key Code Locations
+## 2. Key Code Locations & Architectural Seams
 
-- **Data Normalization & Ingestion**: src/lib/aqi/data-gov.ts, src/lib/aqi/normalize.ts, src/lib/aqi/cpcb.ts
-- **Map & UI Component**: src/components/map/delhi-aqi-map.tsx, src/components/map/map.module.css
-- **Station Deep-Dive Drawer**: src/components/map/station-detail-drawer.tsx
-- **72h Forecast Timeline Scrubber**: src/components/map/forecast-timeline.tsx, src/app/api/forecast/route.ts
-- **Policy Sandbox**: src/components/map/policy-sandbox.tsx, ackend/policy.py
-- **Voice AI (VayuVani)**: ackend/jarvis/live_session.py, src/hooks/useJarvisVoice.ts
+- **Data Ingestion & Normalization**:
+  - `src/lib/aqi/data-gov.ts`: Ingests live Copernicus CAMS reanalysis and Open-Meteo High-Resolution Aerosol/Weather feeds.
+  - `src/lib/aqi/cpcb.ts`: Canonical Indian CPCB piecewise linear sub-index conversion and color/category mapping.
+  - `src/lib/aqi/normalize.ts`: GeoJSON feature formatting for 105+ CAAQMS monitoring stations.
+- **Frontend Map & Interactive Controls**:
+  - `src/components/map/delhi-aqi-map.tsx`: High-performance MapLibre GL canvas with vectorized IDW spatial interpolation.
+  - `src/components/map/forecast-timeline.tsx`: 72-hour forecast timeline scrubber with live playback.
+  - `src/components/map/station-detail-drawer.tsx`: Station-level telemetry and historical pollutant breakdown drawer.
+  - `src/components/map/policy-sandbox.tsx`: Real-time interactive GRAP policy intervention simulator.
+  - `src/components/map/jarvis-voice-pill.tsx`: Glowing organic ambient voice assistant interface.
+  - `src/hooks/useJarvisVoice.ts`: Web Audio API AudioWorklet PCM streaming client.
+- **Backend Physics, ML & Voice Engine (FastAPI)**:
+  - `backend/main.py`: Core FastAPI application with CORS, uptime ping, health, and WebSocket endpoints.
+  - `backend/jarvis/live_session.py`: Bi-directional WebSocket bridge to Gemini Multimodal Live API.
+  - `backend/jarvis/tools.py`: 8 specialized environmental tools (station lookups, 72h forecasts, NASA fires, GRAP policy simulations, web search).
+  - `backend/ml_forecast.py`: Chronos-Bolt zero-shot forecaster with physics residual adapter.
+  - `backend/physics.py`: Beer-Lambert solar extinction and Pasquill-Gifford Gaussian plume dispersion models.
+  - `backend/policy.py`: Source apportionment and secondary PBLH expansion physics simulator.
+  - `backend/live_data.py`: Open-Meteo weather, Copernicus CAMS air quality, and NASA FIRMS fire ingestion.

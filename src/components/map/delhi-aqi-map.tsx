@@ -547,7 +547,10 @@ const handleStationSearch = useCallback(() => {
       <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
 
       <div ref={dockRef} className={styles.bottomDock}>
-        <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
+        <ForecastTimeline
+          onHourChange={handleForecastChange}
+          baselineAqi={metrics.regionalAqi ?? 260}
+        />
         <AqiLegend activeAqi={forecastAqi ?? metrics.regionalAqi ?? 0} />
         <div className={styles.mapAttribution}>
           <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>
@@ -557,7 +560,6 @@ const handleStationSearch = useCallback(() => {
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
         </div>
       </div>
-      
     </main>
   );
 }

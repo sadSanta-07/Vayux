@@ -122,19 +122,22 @@ npm test
 
 | Test Suite | Test File | Key Verified Invariants |
 | :--- | :--- | :--- |
-| **CPCB AQI Formulation** | `tests/cpcb_aqi.test.ts` | Piecewise linear sub-index interpolation for all 7 pollutants ($PM_{2.5}, PM_{10}, NO_2, SO_2, CO, O_3, NH_3$), category boundaries, color codes |
-| **Live CAAQMS Ingestion** | `tests/live_feed.test.ts` | Ingestion of 105 stations across Delhi NCR ($75.5^\circ - 78.8^\circ\text{E}, 27.0^\circ - 30.5^\circ\text{N}$), physical bounds validation |
-| **Forecast Trajectory Continuity** | `tests/forecast_continuity.test.ts` | 72-hour forecast trajectory continuity, Hour 0 baseline grounding, step jump bounds ($|\Delta AQI| \le 35$) |
+| **CPCB AQI Formulation** | `tests/cpcb_aqi.test.ts` | Piecewise linear sub-index interpolation for all criteria pollutants ($PM_{2.5}, PM_{10}, NO_2, SO_2, CO, O_3$), category boundaries, color codes |
+| **Live CAAQMS & CAMS Ingestion** | `tests/live_feed.test.ts` | Real-world Copernicus CAMS and 105 CAAQMS stations across Delhi NCR ($75.5^\circ - 78.8^\circ\text{E}, 27.0^\circ - 30.5^\circ\text{N}$) |
+| **Forecast Trajectory Continuity** | `tests/forecast_continuity.test.ts` | 72-hour forecast trajectory continuity, Hour 0 baseline grounding, strict $C^0$ anchoring ($|\Delta AQI| \le 15/\text{hr}$) |
 | **GRAP Policy Mitigation** | `tests/policy_simulation.test.ts` | Chemical mass-balance source apportionment, monotonic AQI improvement, secondary PBL expansion feedback |
+| **10-Angle Voice Intelligence** | `backend/tests/benchmark_all_angles.py` | 10-angle stress test: station queries, 72h temperature forecast, NASA fires, GRAP policy, web search intel, Hindi/Hinglish |
+| **Multimodal Marathon Voice** | `backend/tests/marathon_multiturn.py` | Continuous multi-turn bidirectional audio streaming with 0 disconnects |
 
 ```
 ==========================================================
 🧪 VayuX Automated Verification & Test Suite Runner
 ==========================================================
-✅ PASS | tests/cpcb_aqi.test.ts              (1572ms)
-✅ PASS | tests/live_feed.test.ts             (3495ms)
-✅ PASS | tests/forecast_continuity.test.ts   (1474ms)
-✅ PASS | tests/policy_simulation.test.ts     (1509ms)
+✅ PASS | tests/cpcb_aqi.test.ts              (1081ms)
+✅ PASS | tests/live_feed.test.ts             (3317ms)
+✅ PASS | tests/forecast_continuity.test.ts   (1118ms)
+✅ PASS | tests/policy_simulation.test.ts     (1047ms)
+✅ PASS | backend/tests/benchmark_all_angles  (10/10 PASS)
 ==========================================================
 🎉 ALL TESTS PASSED! VayuX engine verified & robust.
 ```

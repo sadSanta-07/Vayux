@@ -16,13 +16,13 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
   const aqi = station?.aqi ?? 200;
   const aqiColor = getAqiColor(aqi);
 
-  // Exact pollutant measurements with µg/m³ and ppb matching aqi.in format
+  // Exact pollutant measurements with µg/m³ and ppb matching CPCB / EPA standard conversions at 25°C & 1 atm
   const rawPm25 = station?.pm25 ?? 59;
   const rawPm10 = station?.pm10 ?? 164;
-  const rawCoPpb = station?.co ? Math.round(station.co * 2300) : 2190;
-  const rawSo2Ppb = station?.so2 ? Math.round(station.so2 * 0.38) : 6;
-  const rawNo2Ppb = station?.no2 ? Math.round(station.no2 * 0.24) : 11;
-  const rawO3Ppb = station?.o3 ? Math.round(station.o3 * 0.29) : 7;
+  const rawCoPpb = station?.co ? Math.round(station.co * 873) : 1850;
+  const rawSo2Ppb = station?.so2 ? Math.round(station.so2 * 0.381) : 6;
+  const rawNo2Ppb = station?.no2 ? Math.round(station.no2 * 0.531) : 18;
+  const rawO3Ppb = station?.o3 ? Math.round(station.o3 * 0.509) : 14;
 
   const pollutants = [
     {
@@ -75,11 +75,15 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
     const width = 280;
     const height = 65;
     const count = 24;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const baseDiurnal = 1.0 + 0.22 * Math.sin(((currentHour - 9) * Math.PI) / 12);
 
     for (let i = 0; i <= count; i++) {
       const h = i - 24;
-      const diurnal = Math.sin(((h + 9) * Math.PI) / 12);
-      const histAqi = Math.max(30, Math.min(500, Math.round(aqi * (1.0 + 0.22 * diurnal - (Math.abs(h) / 180)))));
+      const hourOfDay = (currentHour + h + 48) % 24;
+      const diurnal = (1.0 + 0.22 * Math.sin(((hourOfDay - 9) * Math.PI) / 12) - (Math.abs(h) / 220)) / baseDiurnal;
+      const histAqi = Math.max(20, Math.min(500, Math.round(aqi * diurnal)));
       const x = (i / count) * width;
       const y = height - ((histAqi / 500) * (height - 12) + 6);
       points.push({ x, y, aqi: histAqi });
@@ -87,17 +91,21 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
     return points;
   }, [aqi]);
 
-  // 72-hour forecast points
+  // 72-hour forecast points matching foundation engine continuity
   const forecastPoints = useMemo(() => {
     const points: { x: number; y: number; aqi: number }[] = [];
     const width = 280;
     const height = 65;
     const count = 24;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const baseDiurnal = 1.0 + 0.25 * Math.sin(((currentHour - 9) * Math.PI) / 12);
 
     for (let i = 0; i <= count; i++) {
       const hour = (i / count) * 72;
-      const diurnal = Math.sin(((hour % 24 - 9) * Math.PI) / 12);
-      const simAqi = Math.max(30, Math.min(500, Math.round(aqi * (1.0 + 0.28 * diurnal - (hour / 200)))));
+      const hourOfDay = (currentHour + Math.round(hour)) % 24;
+      const diurnal = (1.0 + 0.25 * Math.sin(((hourOfDay - 9) * Math.PI) / 12) - (hour / 220)) / baseDiurnal;
+      const simAqi = Math.max(20, Math.min(500, Math.round(aqi * diurnal)));
       const x = (i / count) * width;
       const y = height - ((simAqi / 500) * (height - 12) + 6);
       points.push({ x, y, aqi: simAqi });

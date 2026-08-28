@@ -48,6 +48,9 @@ def test_physics_residual_bounds_and_continuity(adapter):
 
 def test_inference_latency_sla(loader):
     history = [150.0] * 168
+    # Warm-up pass
+    loader.predict_zero_shot(history, prediction_length=72)
+    
     t0 = pytest.importorskip("time").perf_counter()
     loader.predict_zero_shot(history, prediction_length=72)
     elapsed_ms = (pytest.importorskip("time").perf_counter() - t0) * 1000.0

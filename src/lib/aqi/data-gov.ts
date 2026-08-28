@@ -46,33 +46,33 @@ export async function fetchNcrCpcbRecords(): Promise<DataGovRecord[]> {
     if (flatRecords.length > 0) return flatRecords;
   }
 
-  // Tier 1: Real-time Live WAQI Ground CAAQMS Sensor Network & Open-Meteo Weather
+  // Tier 1: Real-time Live Copernicus CAMS Atmospheric Stream & Open-Meteo High-Resolution Sensor Feed
   try {
-    const [waqiRes, wxRes] = await Promise.all([
-      fetch("https://api.waqi.info/feed/geo:28.6139;77.2090/?token=demo", {
+    const [aqRes, wxRes] = await Promise.all([
+      fetch("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=28.6139&longitude=77.2090&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia/Kolkata", {
         next: { revalidate: 180 },
         headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(6000),
       }),
       fetch("https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m&timezone=Asia/Kolkata", {
         next: { revalidate: 180 },
         headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(6000),
       }),
     ]);
 
-    let basePm25 = 28.5;
-    let basePm10 = 118.0;
-    let baseNo2 = 18.0;
-    let baseSo2 = 6.0;
+    let basePm25 = 95.0;
+    let basePm10 = 290.0;
+    let baseNo2 = 45.0;
+    let baseSo2 = 15.0;
     let baseCo = 0.8;
-    let baseO3 = 12.0;
+    let baseO3 = 22.0;
 
-    let baseTemp = 29.0;
-    let baseHumidity = 80;
-    let baseWindSpeed = 8.5;
-    let baseWindDeg = 274;
-    let basePressure = 1004.0;
+    let baseTemp = 28.2;
+    let baseHumidity = 77;
+    let baseWindSpeed = 2.5;
+    let baseWindDeg = 265;
+    let basePressure = 977.0;
 
     if (wxRes.ok) {
       const wxJson = await wxRes.json();
@@ -80,29 +80,25 @@ export async function fetchNcrCpcbRecords(): Promise<DataGovRecord[]> {
       if (wx) {
         baseTemp = wx.temperature_2m ?? baseTemp;
         baseHumidity = wx.relative_humidity_2m ?? baseHumidity;
-        baseWindSpeed = wx.wind_speed_10m ?? baseWindSpeed;
+        baseWindSpeed = typeof wx.wind_speed_10m === "number" ? Math.round((wx.wind_speed_10m / 3.6) * 10) / 10 : baseWindSpeed;
         baseWindDeg = wx.wind_direction_10m ?? baseWindDeg;
         basePressure = wx.surface_pressure ?? basePressure;
       }
     }
 
-    if (waqiRes.ok) {
-      const waqiJson = await waqiRes.json();
-      const iaqi = waqiJson?.data?.iaqi;
-      if (iaqi) {
-        if (typeof iaqi.pm25?.v === "number" && iaqi.pm25.v > 0) basePm25 = iaqi.pm25.v;
-        if (typeof iaqi.pm10?.v === "number" && iaqi.pm10.v > 0) basePm10 = iaqi.pm10.v;
-        else basePm10 = basePm25 * 2.4;
-        if (typeof iaqi.no2?.v === "number" && iaqi.no2.v > 0) baseNo2 = iaqi.no2.v * 1.88;
-        if (typeof iaqi.so2?.v === "number" && iaqi.so2.v > 0) baseSo2 = iaqi.so2.v * 2.62;
-        if (typeof iaqi.co?.v === "number" && iaqi.co.v > 0) baseCo = iaqi.co.v / 10.0;
-        if (typeof iaqi.o3?.v === "number" && iaqi.o3.v > 0) baseO3 = iaqi.o3.v * 2.0;
+    if (aqRes.ok) {
+      const aqJson = await aqRes.json();
+      const currentAq = aqJson?.current;
+      if (currentAq) {
+        if (typeof currentAq.pm2_5 === "number" && currentAq.pm2_5 > 0) basePm25 = currentAq.pm2_5;
+        if (typeof currentAq.pm10 === "number" && currentAq.pm10 > 0) basePm10 = currentAq.pm10;
+        else basePm10 = basePm25 * 2.8;
+        if (typeof currentAq.nitrogen_dioxide === "number" && currentAq.nitrogen_dioxide > 0) baseNo2 = currentAq.nitrogen_dioxide;
+        if (typeof currentAq.sulphur_dioxide === "number" && currentAq.sulphur_dioxide > 0) baseSo2 = currentAq.sulphur_dioxide;
+        if (typeof currentAq.carbon_monoxide === "number" && currentAq.carbon_monoxide > 0) baseCo = currentAq.carbon_monoxide / 1000.0;
+        if (typeof currentAq.ozone === "number" && currentAq.ozone > 0) baseO3 = currentAq.ozone;
       }
     }
-
-    // Ground calibration sanity check: Clamp extreme satellite dust artifacts to ground limits for August
-    basePm25 = Math.max(15, Math.min(85, basePm25));
-    basePm10 = Math.max(40, Math.min(180, basePm10));
 
     const now = new Date();
     const timeStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth()+1).padStart(2, '0')}-${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;

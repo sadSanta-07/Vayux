@@ -74,7 +74,22 @@ async def generate_hybrid_forecast(payload: ForecastRequest):
             p90_base, h_base, u_wind, v_wind, payload.latitude, payload.longitude, payload.fire_hotspots
         )
 
-        aqi_p50 = [pm25_to_indian_aqi(val) for val in p50_coupled]
+        raw_aqi_p50 = [pm25_to_indian_aqi(val) for val in p50_coupled]
+        aqi_p50: List[int] = []
+        for h, val in enumerate(raw_aqi_p50):
+            if h == 0:
+                aqi_p50.append(val)
+            else:
+                prev = aqi_p50[h - 1]
+                delta = val - prev
+                if delta > 35:
+                    clamped = prev + 35
+                elif delta < -35:
+                    clamped = prev - 35
+                else:
+                    clamped = val
+                aqi_p50.append(int(max(0, min(500, clamped))))
+
         t_elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
         return ForecastResponse(

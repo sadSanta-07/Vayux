@@ -1,7 +1,10 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 from fastapi import FastAPI, WebSocket, Body ,APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +17,7 @@ from policy import simulate_policy_impact
 from live_data import fetch_live_weather, fetch_live_fires
 from ml_forecast import router as forecast_router
 from jarvis.live_session import handle_jarvis_live_websocket
+from ml.model_selector import select_best_reasoning_model, delegate_background_task
 
 app = FastAPI(
     title="vayuX Coupled Atmospheric & Jarvis Intelligence Engine",
@@ -38,11 +42,18 @@ async def jarvis_live_endpoint(websocket: WebSocket):
 
 @app.get("/health")
 def health_check():
+    best_model = select_best_reasoning_model()
     return {
         "status": "operational",
         "engine": "vayuX-Atmospheric-Physics-v2",
-        "jarvis_voice_engine": "Gemini-3.5-Transcribe-Live-Ready"
+        "jarvis_voice_engine": "Gemini-2.5-Flash-Native-Audio-Dialog",
+        "reasoning_model_selected": best_model.get("model_id", "gemini-3.7-flash")
     }
+
+@app.get("/api/v1/models/best-reasoning-model")
+def get_best_reasoning_model():
+    """Returns the dynamically selected highest-intelligence Gemini model scored via /gemini-model-selection."""
+    return select_best_reasoning_model()
 
 @app.post("/api/v1/physics/pblh-feedback")
 async def get_pblh_feedback(base_pblh: float = 850.0, pm25: float = 220.0, wind_speed: float = 2.4):
@@ -68,7 +79,35 @@ async def generate_advisory(data: dict):
     
     current_date = datetime.datetime.now().strftime("%d %B %Y, %H:%M HRS")
     
-    report = f"""# URGENT EXECUTIVE POLICY ADVISORY
+    prompt = f"""You are the Chief Atmospheric Scientist and Policy Advisor to the Government of NCT Delhi and Commission for Air Quality Management (CAQM).
+Synthesize an authoritative, actionable, and mathematically grounded Executive Policy Brief based on these active VayuX simulation results:
+- Current Live Baseline AQI: {baseline_aqi}
+- Simulated Intervention Target AQI: {simulated_aqi}
+- Predicted Particulate Reduction: {reduction}% Improvement
+- Date/Time: {current_date}
+
+Format the response cleanly in professional Markdown with these sections:
+# URGENT EXECUTIVE POLICY ADVISORY: AIR QUALITY MITIGATION
+**TO:** Office of the Chief Minister & Chief Secretary, Government of NCT Delhi  
+**DATE:** {current_date}  
+**AUTHOR:** VayuX Autonomous Atmospheric Intelligence Engine
+
+### 1. Executive Meteorological Situation Assessment
+Explain boundary layer compression (PBLH < 350m nocturnal inversion lid), upwind stubble transport, and urban stagnation.
+
+### 2. Evaluated Policy Intervention Results
+Summarize baseline ({baseline_aqi}) vs simulated outcome ({simulated_aqi}) with {reduction}% particulate density relief.
+
+### 3. Immediate Statutory Action Plan (CAQM & DPCC Directives)
+List 3-4 specific, high-leverage statutory directives under GRAP Stage-IV / Stage-III.
+"""
+    delegated_report = await delegate_background_task(prompt)
+    
+    if delegated_report and not delegated_report.startswith("["):
+        return {"status": "success", "advisory_markdown": delegated_report, "model": select_best_reasoning_model().get("model_id")}
+
+    # Robust local fallback if offline
+    fallback_report = f"""# URGENT EXECUTIVE POLICY ADVISORY
 **TO:** Office of the Chief Secretary & Delhi Pollution Control Committee (DPCC)  
 **DATE:** {current_date}  
 **SUBJECT:** Real-Time Air Quality Intervention & Simulation Impact Assessment  
@@ -93,7 +132,7 @@ Based on the active simulation parameters executed in the **VayuX Policy Sandbox
 
 *Report automatically generated and verified by the VayuX Two-Way Coupled Atmospheric Engine.*
 """
-    return {"status": "success", "advisory_markdown": report}
+    return {"status": "success", "advisory_markdown": fallback_report, "model": "template-fallback"}
 
     # UptimeRobot Ping Route
 @app.head("/")

@@ -4,6 +4,13 @@ import numpy as np
 import requests
 from typing import List, Dict, Any, Tuple, Optional
 
+try:
+    import pyparsing
+    if not hasattr(pyparsing, "DelimitedList"):
+        pyparsing.DelimitedList = getattr(pyparsing, "delimitedList", getattr(pyparsing, "delimited_list", None))
+except Exception:
+    pass
+
 logger = logging.getLogger("VayuX.FoundationLoader")
 
 class FoundationEngineLoader:

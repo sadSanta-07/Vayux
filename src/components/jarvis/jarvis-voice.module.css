@@ -1,0 +1,185 @@
+/* VayuVani Fluid Voice Orb - Ultra-Minimalist OpenAI Advanced Voice Experience */
+
+.voiceWidget {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Floating Voice Orb Button */
+.orbButton {
+  pointer-events: auto;
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.45s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.orbButton:hover {
+  transform: scale(1.08);
+}
+
+.orbButton:active {
+  transform: scale(0.95);
+}
+
+/* Outer Atmospheric Aura */
+.orbAura {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  opacity: 0.35;
+  filter: blur(10px);
+  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.5) 0%, transparent 70%);
+}
+
+/* Orb Core Surface */
+.orbCore {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #1e293b 0%, #090d16 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: all 0.45s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* Flowing Wave Layers for Speaking / Output */
+.fluidWave {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  mix-blend-mode: screen;
+}
+
+.wave1 {
+  background: conic-gradient(from 0deg, #10b981, #06b6d4, #6366f1, #10b981);
+  filter: blur(5px);
+}
+
+.wave2 {
+  background: radial-gradient(circle at 35% 35%, #34d399, #0284c7, transparent 70%);
+  filter: blur(3px);
+}
+
+/* Icon in center */
+.micIcon {
+  position: relative;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  color: #f8fafc;
+  transition: all 0.35s ease;
+}
+
+/* ==========================================================================
+   STATE 1: Active / Taking Input (Listening) - Button Enlarges & Slightly Glows
+   ========================================================================== */
+.orbButton[data-state="listening"] {
+  width: 76px;
+  height: 76px;
+  transform: scale(1.05);
+}
+
+.orbButton[data-state="listening"] .orbAura {
+  opacity: 0.75;
+  inset: -14px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.65) 0%, rgba(52, 211, 153, 0.25) 50%, transparent 75%);
+  animation: breathingGlow 2.2s ease-in-out infinite alternate;
+}
+
+.orbButton[data-state="listening"] .orbCore {
+  border-color: rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 28px rgba(16, 185, 129, 0.4), inset 0 0 16px rgba(16, 185, 129, 0.25);
+}
+
+.orbButton[data-state="listening"] .micIcon {
+  width: 28px;
+  height: 28px;
+  color: #34d399;
+  animation: micPulse 1.8s ease-in-out infinite alternate;
+}
+
+/* ==========================================================================
+   STATE 2: Answering / Speaking - Button Enlarges & Flows with Fluid Soundwave
+   ========================================================================== */
+.orbButton[data-state="speaking"] {
+  width: 78px;
+  height: 78px;
+  transform: scale(1.1);
+}
+
+.orbButton[data-state="speaking"] .orbAura {
+  opacity: 0.95;
+  inset: -18px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.85) 0%, rgba(99, 102, 241, 0.5) 50%, transparent 80%);
+  animation: fluidRotate 3.6s linear infinite, pulseSpeaking 1.6s ease-in-out infinite alternate;
+}
+
+.orbButton[data-state="speaking"] .orbCore {
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 35px rgba(6, 182, 212, 0.65), inset 0 0 20px rgba(99, 102, 241, 0.55);
+}
+
+.orbButton[data-state="speaking"] .fluidWave {
+  opacity: 0.9;
+  transform: scale(1.1);
+  animation: fluidRotate 3.2s linear infinite;
+}
+
+.orbButton[data-state="speaking"] .micIcon {
+  width: 30px;
+  height: 30px;
+  color: #ffffff;
+  animation: soundwaveBounce 1s ease-in-out infinite;
+}
+
+/* --- Smooth Keyframe Animations --- */
+@keyframes fluidRotate {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.12); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes breathingGlow {
+  0% { transform: scale(0.92); opacity: 0.5; }
+  100% { transform: scale(1.18); opacity: 0.9; }
+}
+
+@keyframes pulseSpeaking {
+  0% { transform: scale(0.96); }
+  100% { transform: scale(1.25); }
+}
+
+@keyframes micPulse {
+  0% { transform: scale(0.95); opacity: 0.85; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes soundwaveBounce {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.18); }
+}

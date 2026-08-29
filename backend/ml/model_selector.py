@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
-from gemini_keys import GeminiKeyRing, get_gemini_api_keys, is_rate_limit_error
+from gemini_keys import get_gemini_api_key, is_rate_limit_error
 
 logger = logging.getLogger("VayuX.ModelSelector")
 
@@ -70,8 +70,8 @@ def select_best_reasoning_model(api_key: Optional[str] = None) -> Dict[str, Any]
     if _CACHED_MODEL_INFO is not None:
         return _CACHED_MODEL_INFO
 
-    keys = get_gemini_api_keys(api_key)
-    if not keys:
+    configured_api_key = get_gemini_api_key(api_key)
+    if not configured_api_key:
         fallback = {
             "model_id": "gemini-3.7-flash",
             "score": 3800050,
@@ -82,68 +82,58 @@ def select_best_reasoning_model(api_key: Optional[str] = None) -> Dict[str, Any]
         _CACHED_MODEL_INFO = fallback
         return fallback
 
-    key_ring = GeminiKeyRing(keys)
-    while True:
-        try:
-            client = genai.Client(api_key=key_ring.current)
-            all_models = client.models.list()
+    try:
+        client = genai.Client(api_key=configured_api_key)
+        all_models = client.models.list()
 
-            # Filter out media-only models (veo, imagen, tts-only, transcription-only)
-            excluded_keywords = ["veo", "imagen", "tts", "transcribe", "image-preview", "image"]
+        # Filter out media-only models (veo, imagen, tts-only, transcription-only)
+        excluded_keywords = ["veo", "imagen", "tts", "transcribe", "image-preview", "image"]
 
-            candidates = []
-            for m in all_models:
-                model_id = m.name.replace("models/", "")
-                lowered = model_id.lower()
-                if any(kw in lowered for kw in excluded_keywords):
-                    continue
-                if not ("gemini" in lowered):
-                    continue
-                score = _score_model_for_intelligence(model_id)
-                candidates.append({"model_id": model_id, "score": score, "display_name": getattr(m, "display_name", model_id)})
-
-            # Sort descending by intelligence score
-            candidates.sort(key=lambda x: x["score"], reverse=True)
-
-            if not candidates:
-                best_id = "gemini-3.7-flash"
-                best_score = 3800050
-            else:
-                best_id = candidates[0]["model_id"]
-                best_score = candidates[0]["score"]
-
-            result = {
-                "model_id": best_id,
-                "score": best_score,
-                "tier": f"Autonomous SOTA Reasoning ({best_id})",
-                "all_ranked_models": candidates[:8]
-            }
-            _CACHED_BEST_MODEL = best_id
-            _CACHED_MODEL_INFO = result
-            logger.info(f"[ModelSelector] Selected best reasoning model: {best_id} (Score: {best_score})")
-            return result
-        except Exception as error:
-            if key_ring.advance_for(error):
-                logger.warning(
-                    "[ModelSelector] Gemini key %d/%d was rate limited; switching keys.",
-                    key_ring.position - 1,
-                    key_ring.size,
-                )
+        candidates = []
+        for m in all_models:
+            model_id = m.name.replace("models/", "")
+            lowered = model_id.lower()
+            if any(kw in lowered for kw in excluded_keywords):
                 continue
+            if not ("gemini" in lowered):
+                continue
+            score = _score_model_for_intelligence(model_id)
+            candidates.append({"model_id": model_id, "score": score, "display_name": getattr(m, "display_name", model_id)})
 
-            logger.warning(
-                "[ModelSelector] Model scan failed with %s. Defaulting to gemini-3.7-flash.",
-                type(error).__name__,
-            )
-            fallback = {
-                "model_id": "gemini-3.7-flash",
-                "score": 3800050,
-                "tier": "Fallback SOTA Reasoning",
-                "error": type(error).__name__,
-            }
-            _CACHED_BEST_MODEL = fallback["model_id"]
-            _CACHED_MODEL_INFO = fallback
-            return fallback
+        # Sort descending by intelligence score
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+
+        if not candidates:
+            best_id = "gemini-3.7-flash"
+            best_score = 3800050
+        else:
+            best_id = candidates[0]["model_id"]
+            best_score = candidates[0]["score"]
+
+        result = {
+            "model_id": best_id,
+            "score": best_score,
+            "tier": f"Autonomous SOTA Reasoning ({best_id})",
+            "all_ranked_models": candidates[:8]
+        }
+        _CACHED_BEST_MODEL = best_id
+        _CACHED_MODEL_INFO = result
+        logger.info(f"[ModelSelector] Selected best reasoning model: {best_id} (Score: {best_score})")
+        return result
+    except Exception as error:
+        logger.warning(
+            "[ModelSelector] Model scan failed with %s. Defaulting to gemini-3.7-flash.",
+            type(error).__name__,
+        )
+        fallback = {
+            "model_id": "gemini-3.7-flash",
+            "score": 3800050,
+            "tier": "Fallback SOTA Reasoning",
+            "error": type(error).__name__,
+        }
+        _CACHED_BEST_MODEL = fallback["model_id"]
+        _CACHED_MODEL_INFO = fallback
+        return fallback
 
 async def delegate_background_task(
     prompt: str,
@@ -159,10 +149,10 @@ async def delegate_background_task(
     if not ranked:
         ranked = [model_info.get("model_id", "gemini-3.7-flash"), "gemini-3.6-flash", "gemini-2.5-pro", "gemini-2.5-flash"]
 
-    keys = get_gemini_api_keys()
-    if not keys:
+    api_key = get_gemini_api_key()
+    if not api_key:
         return "[ModelSelector Error] No API key available for background delegation."
-    key_ring = GeminiKeyRing(keys)
+    client = genai.Client(api_key=api_key)
     
     config = types.GenerateContentConfig(
         temperature=0.2,
@@ -170,32 +160,21 @@ async def delegate_background_task(
     )
     
     for candidate in ranked[:4]:
-        while True:
-            try:
-                client = genai.Client(api_key=key_ring.current)
-                response = await client.aio.models.generate_content(
-                    model=candidate,
-                    contents=prompt,
-                    config=config
-                )
-                if response.text:
-                    return response.text
-                break
-            except Exception as error:
-                if key_ring.advance_for(error):
-                    logger.warning(
-                        "[ModelSelector] Gemini key %d/%d was rate limited; switching keys.",
-                        key_ring.position - 1,
-                        key_ring.size,
-                    )
-                    continue
-                if is_rate_limit_error(error):
-                    return "[Delegation Error] All configured Gemini API keys are rate limited."
-                logger.warning(
-                    "[ModelSelector] Attempt on %s failed with %s; trying next candidate.",
-                    candidate,
-                    type(error).__name__,
-                )
-                break
+        try:
+            response = await client.aio.models.generate_content(
+                model=candidate,
+                contents=prompt,
+                config=config
+            )
+            if response.text:
+                return response.text
+        except Exception as error:
+            if is_rate_limit_error(error):
+                return "[Delegation Error] The configured Gemini API key is rate limited."
+            logger.warning(
+                "[ModelSelector] Attempt on %s failed with %s; trying next candidate.",
+                candidate,
+                type(error).__name__,
+            )
 
     return "[Delegation Error] All reasoning candidate models failed to generate content."

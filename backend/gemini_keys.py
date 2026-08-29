@@ -2,21 +2,15 @@ import os
 from typing import Optional
 
 
-def get_gemini_api_keys(value: Optional[str] = None) -> list[str]:
-    """Return unique Gemini API keys without ever exposing them in logs."""
+def get_gemini_api_key(value: Optional[str] = None) -> Optional[str]:
+    """Return the configured Gemini API key without exposing it in logs."""
     sources = [value, os.getenv("GEMINI_API_KEY"), os.getenv("GOOGLE_API_KEY")]
 
-    keys: list[str] = []
     for source in sources:
-        if not source:
-            continue
-        for candidate in source.split(","):
-            key = candidate.strip()
-            if key and key not in keys:
-                keys.append(key)
-        if keys:
-            break
-    return keys
+        key = source.strip() if source else ""
+        if key:
+            return key
+    return None
 
 
 def is_rate_limit_error(error: BaseException) -> bool:
@@ -53,31 +47,3 @@ def is_rate_limit_error(error: BaseException) -> bool:
             "429 TOO MANY REQUESTS",
         )
     )
-
-
-class GeminiKeyRing:
-    """Tracks the active key and advances only for rate-limit failures."""
-
-    def __init__(self, keys: list[str]):
-        if not keys:
-            raise ValueError("At least one Gemini API key is required.")
-        self._keys = tuple(keys)
-        self._index = 0
-
-    @property
-    def current(self) -> str:
-        return self._keys[self._index]
-
-    @property
-    def position(self) -> int:
-        return self._index + 1
-
-    @property
-    def size(self) -> int:
-        return len(self._keys)
-
-    def advance_for(self, error: BaseException) -> bool:
-        if not is_rate_limit_error(error) or self._index >= len(self._keys) - 1:
-            return False
-        self._index += 1
-        return True

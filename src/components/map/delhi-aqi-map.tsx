@@ -5,6 +5,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import * as maplibregl from "maplibre-gl";
 import { type CanvasSource, type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import gsap from "gsap";
+import JarvisVoiceWidget from "@/components/jarvis/JarvisVoiceWidget";
 import type { AqiApiResponse, StationProperties, SurfaceFeatureCollection } from "@/lib/aqi/types";
 import { CPCB_AQI_SCALE, getAqiColor } from "@/lib/aqi/cpcb";
 import { NCR_INTERPOLATION_BBOX } from "@/lib/aqi/config";
@@ -117,7 +118,10 @@ export function DelhiAqiMap() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActivePanel(null);
+      if (event.key === "Escape") {
+        setActivePanel(null);
+        setSelectedStation(null);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -281,11 +285,18 @@ export function DelhiAqiMap() {
         if (!feature || feature.geometry.type !== "Point") return;
         const props = feature.properties as StationProperties;
         
+        setActivePanel(null);
         setStationQuery(props.station);
         setSelectedStation(props);
 
         const coordinates = feature.geometry.coordinates as [number, number];
-        map.flyTo({ center: coordinates, zoom: 12.5, duration: 750, essential: true });
+        map.flyTo({
+          center: coordinates,
+          zoom: 12.5,
+          offset: compactMedia.matches ? [0, -96] : [210, 0],
+          duration: 750,
+          essential: true,
+        });
       });
 
       paintAqiData(dataRef.current);
@@ -374,8 +385,16 @@ const handleStationSearch = useCallback(() => {
     if (!match || !map) return;
 
     const coordinates = match.geometry.coordinates as [number, number];
-    map.flyTo({ center: coordinates, zoom: 12.5, duration: 750, essential: true });
+    const compact = window.matchMedia(COMPACT_LAYOUT_QUERY).matches;
+    map.flyTo({
+      center: coordinates,
+      zoom: 12.5,
+      offset: compact ? [0, -96] : [210, 0],
+      duration: 750,
+      essential: true,
+    });
     
+    setActivePanel(null);
     setSelectedStation(match.properties);
   }, [aqiData, stationQuery]);
 
@@ -544,13 +563,24 @@ const handleStationSearch = useCallback(() => {
         <button type="button" className={styles.closeButton} onClick={() => setActivePanel(null)} aria-label="Close policy tools">×</button>
         <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
       </section>
+      {selectedStation ? (
+        <button
+          type="button"
+          className={styles.stationScrim}
+          aria-label="Close station details"
+          onClick={() => setSelectedStation(null)}
+        />
+      ) : null}
       <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
 
       <div ref={dockRef} className={styles.bottomDock}>
-        <ForecastTimeline
-          onHourChange={handleForecastChange}
-          baselineAqi={metrics.regionalAqi ?? 260}
-        />
+        <div className={styles.forecastCardWrap}>
+          <JarvisVoiceWidget />
+          <ForecastTimeline
+            onHourChange={handleForecastChange}
+            baselineAqi={metrics.regionalAqi ?? 260}
+          />
+        </div>
         <AqiLegend activeAqi={forecastAqi ?? metrics.regionalAqi ?? 0} />
         <div className={styles.mapAttribution}>
           <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>

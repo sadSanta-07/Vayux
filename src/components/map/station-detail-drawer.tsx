@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { type CSSProperties, useMemo } from "react";
 import type { StationProperties } from "@/lib/aqi/types";
 import { getAqiColor } from "@/lib/aqi/cpcb";
 import styles from "./map.module.css";
@@ -124,11 +124,26 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
   if (!station) return null;
 
   return (
-    <aside className={styles.stationDrawer} aria-label="Station Details">
+    <aside
+      className={styles.stationDrawer}
+      style={{ "--station-accent": aqiColor } as CSSProperties}
+      aria-label="Station details"
+      role="dialog"
+      data-station-drawer
+    >
+      <div className={styles.stationDrawerHandle} aria-hidden="true" />
       <div className={styles.stationDrawerHeader}>
-        <div>
-          <span className={styles.stationDrawerEyebrow}>📍 Station Location</span>
-          <h2 className={styles.stationDrawerTitle}>{station.station}</h2>
+        <div className={styles.stationDrawerHeading}>
+          <span className={styles.stationDrawerPin} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
+          </span>
+          <div>
+            <span className={styles.stationDrawerEyebrow}>Monitoring station</span>
+            <h2 className={styles.stationDrawerTitle}>{station.station}</h2>
+          </div>
         </div>
         <button
           type="button"
@@ -136,35 +151,18 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
           onClick={onClose}
           aria-label="Close Station Drawer"
         >
-          ✕
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
         </button>
-      </div>
-
-      {/* Live Weather Metrics Strip */}
-      <div className={styles.weatherStrip}>
-        <div className={styles.weatherItem}>
-          <span>Temp</span>
-          <strong>{station.temperature ?? 28.3}°C</strong>
-        </div>
-        <div className={styles.weatherItem}>
-          <span>Humidity</span>
-          <strong>{station.humidity ?? 76}%</strong>
-        </div>
-        <div className={styles.weatherItem}>
-          <span>Wind</span>
-          <strong>{station.windSpeed ?? 10.5} km/h</strong>
-        </div>
-        <div className={styles.weatherItem}>
-          <span>Pressure</span>
-          <strong>{station.pressure ?? 978} hPa</strong>
-        </div>
       </div>
 
       <div className={styles.stationDrawerAqiCard}>
         <div className={styles.stationDrawerAqiHero}>
-          <span className={styles.stationDrawerAqiVal} style={{ color: aqiColor }}>
-            {aqi}
-          </span>
+          <div className={styles.stationDrawerAqiReading}>
+            <small>Live AQI</small>
+            <span className={styles.stationDrawerAqiVal}>{aqi}</span>
+          </div>
           <div className={styles.stationDrawerAqiMeta}>
             <span
               className={styles.stationDrawerCategoryPill}
@@ -188,6 +186,25 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
         </p>
       </div>
 
+      <div className={styles.weatherStrip} aria-label="Current weather conditions">
+        <div className={styles.weatherItem}>
+          <span>Temp</span>
+          <strong>{station.temperature ?? 28.3}°C</strong>
+        </div>
+        <div className={styles.weatherItem}>
+          <span>Humidity</span>
+          <strong>{station.humidity ?? 76}%</strong>
+        </div>
+        <div className={styles.weatherItem}>
+          <span>Wind</span>
+          <strong>{station.windSpeed ?? 10.5} km/h</strong>
+        </div>
+        <div className={styles.weatherItem}>
+          <span>Pressure</span>
+          <strong>{station.pressure ?? 978} hPa</strong>
+        </div>
+      </div>
+
       <div className={styles.stationDrawerSection}>
         <div className={styles.stationDrawerSectionHeader}>
           <span>Live Pollutant Breakdown</span>
@@ -205,7 +222,7 @@ export function StationDetailDrawer({ station, onClose }: StationDetailDrawerPro
                   className={styles.pollutantBarFill}
                   style={{
                     width: `${p.ratio}%`,
-                    backgroundColor: p.isExceeded ? "#f43f5e" : "#eab308",
+                    backgroundColor: p.isExceeded ? aqiColor : getAqiColor(50),
                   }}
                 />
               </div>

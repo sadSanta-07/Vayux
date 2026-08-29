@@ -8,7 +8,7 @@ load_dotenv()
 from fastapi import WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
-from gemini_keys import GeminiKeyRing, get_gemini_api_keys, is_rate_limit_error
+from gemini_keys import get_gemini_api_key, is_rate_limit_error
 from jarvis.tools import JARVIS_TOOL_DECLARATIONS, execute_jarvis_tool
 
 logger = logging.getLogger("VayuX.VayuVaniLive")
@@ -42,49 +42,35 @@ class _BrowserDisconnected(Exception):
     pass
 
 
-async def _connect_voice_session(key_ring: GeminiKeyRing, config: types.LiveConnectConfig):
-    while True:
-        switched_key = False
+async def _connect_voice_session(api_key: str, config: types.LiveConnectConfig):
+    for candidate_model in VOICE_MODELS_FALLBACK:
+        try:
+            logger.info("Attempting connection to voice model: %s", candidate_model)
+            client = genai.Client(
+                api_key=api_key,
+                http_options={"api_version": "v1alpha"},
+            )
+            session_context = client.aio.live.connect(
+                model=candidate_model,
+                config=config,
+            )
+            session = await session_context.__aenter__()
+            logger.info(
+                "Connected to Gemini Live Multimodal Session on %s",
+                candidate_model,
+            )
+            return session_context, session, candidate_model, None
+        except Exception as error:
+            if is_rate_limit_error(error):
+                return None, None, None, "rate_limited"
 
-        for candidate_model in VOICE_MODELS_FALLBACK:
-            try:
-                logger.info("Attempting connection to voice model: %s", candidate_model)
-                client = genai.Client(
-                    api_key=key_ring.current,
-                    http_options={"api_version": "v1alpha"},
-                )
-                session_context = client.aio.live.connect(
-                    model=candidate_model,
-                    config=config,
-                )
-                session = await session_context.__aenter__()
-                logger.info(
-                    "Connected to Gemini Live Multimodal Session on %s",
-                    candidate_model,
-                )
-                return session_context, session, candidate_model, None
-            except Exception as error:
-                if key_ring.advance_for(error):
-                    logger.warning(
-                        "Gemini key %d/%d was rate limited; switching keys.",
-                        key_ring.position - 1,
-                        key_ring.size,
-                    )
-                    switched_key = True
-                    break
+            logger.warning(
+                "Voice model %s unavailable with %s.",
+                candidate_model,
+                type(error).__name__,
+            )
 
-                if is_rate_limit_error(error):
-                    return None, None, None, "rate_limited"
-
-                logger.warning(
-                    "Voice model %s unavailable with %s.",
-                    candidate_model,
-                    type(error).__name__,
-                )
-
-        if switched_key:
-            continue
-        return None, None, None, "models_unavailable"
+    return None, None, None, "models_unavailable"
 
 
 async def _bridge_voice_session(websocket: WebSocket, session):
@@ -121,56 +107,62 @@ async def _bridge_voice_session(websocket: WebSocket, session):
 
     async def send_to_browser():
         try:
-            async for response in session.receive():
-                server_content = response.server_content
-                if server_content is not None:
-                    if server_content.interrupted:
-                        logger.info("VayuVani Turn Interrupted by User")
-                        await websocket.send_json({"type": "interrupted"})
+            # Gemini's receive iterator ends at the end of each model turn. Start a
+            # fresh iterator for the next turn while keeping the Live session open.
+            while True:
+                received_response = False
+                async for response in session.receive():
+                    received_response = True
+                    server_content = response.server_content
+                    if server_content is not None:
+                        if server_content.interrupted:
+                            logger.info("VayuVani Turn Interrupted by User")
+                            await websocket.send_json({"type": "interrupted"})
 
-                    model_turn = server_content.model_turn
-                    if model_turn is not None:
-                        for part in model_turn.parts:
-                            is_thought = getattr(part, "thought", False)
-                            if (
-                                part.text
-                                and not is_thought
-                                and not part.text.strip().startswith("**")
-                            ):
-                                await websocket.send_json(
-                                    {"type": "transcript", "text": part.text}
-                                )
-                            if part.inline_data:
-                                await websocket.send_bytes(part.inline_data.data)
+                        model_turn = server_content.model_turn
+                        if model_turn is not None:
+                            for part in model_turn.parts:
+                                is_thought = getattr(part, "thought", False)
+                                if (
+                                    part.text
+                                    and not is_thought
+                                    and not part.text.strip().startswith("**")
+                                ):
+                                    await websocket.send_json(
+                                        {"type": "transcript", "text": part.text}
+                                    )
+                                if part.inline_data:
+                                    await websocket.send_bytes(part.inline_data.data)
 
-                    if server_content.turn_complete:
-                        logger.info("VayuVani Turn Complete")
-                        await websocket.send_json({"type": "turn_complete"})
+                        if server_content.turn_complete:
+                            logger.info("VayuVani Turn Complete")
+                            await websocket.send_json({"type": "turn_complete"})
 
-                tool_call = response.tool_call
-                if tool_call is not None:
-                    for function_call in tool_call.function_calls:
-                        logger.info(
-                            "VayuVani Tool Invocation: %s",
-                            function_call.name,
-                        )
-                        tool_result = await execute_jarvis_tool(
-                            function_call.name,
-                            function_call.args,
-                        )
-                        await session.send_tool_response(
-                            function_responses=[
-                                types.FunctionResponse(
-                                    name=function_call.name,
-                                    id=function_call.id,
-                                    response={"result": tool_result},
-                                )
-                            ]
-                        )
+                    tool_call = response.tool_call
+                    if tool_call is not None:
+                        for function_call in tool_call.function_calls:
+                            logger.info(
+                                "VayuVani Tool Invocation: %s",
+                                function_call.name,
+                            )
+                            tool_result = await execute_jarvis_tool(
+                                function_call.name,
+                                function_call.args,
+                            )
+                            await session.send_tool_response(
+                                function_responses=[
+                                    types.FunctionResponse(
+                                        name=function_call.name,
+                                        id=function_call.id,
+                                        response={"result": tool_result},
+                                    )
+                                ]
+                            )
+
+                if not received_response:
+                    raise RuntimeError("Gemini Live connection closed without a response.")
         except WebSocketDisconnect as error:
             raise _BrowserDisconnected from error
-
-        raise RuntimeError("Gemini Live session ended unexpectedly.")
 
     tasks = [
         asyncio.create_task(receive_from_browser()),
@@ -191,12 +183,11 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
     await websocket.accept()
     logger.info("VayuVani Live Client Connected via WebSocket.")
     
-    api_keys = get_gemini_api_keys()
-    if not api_keys:
+    api_key = get_gemini_api_key()
+    if not api_key:
         await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY is not configured on server."})
         await websocket.close()
         return
-    key_ring = GeminiKeyRing(api_keys)
 
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
@@ -209,69 +200,52 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
         tools=[{"function_declarations": JARVIS_TOOL_DECLARATIONS}]
     )
 
-    while True:
-        session_context, session, connected_model, failure = await _connect_voice_session(
-            key_ring,
-            config,
+    session_context, session, connected_model, failure = await _connect_voice_session(
+        api_key,
+        config,
+    )
+
+    if session is None:
+        message = (
+            "The configured Gemini API key is rate limited. Try again later."
+            if failure == "rate_limited"
+            else "Could not connect to any Gemini Live audio model."
         )
+        await websocket.send_json({"type": "error", "message": message})
+        await websocket.close()
+        return
 
-        if session is None:
-            message = (
-                "All configured Gemini API keys are rate limited. Try again later."
-                if failure == "rate_limited"
-                else "Could not connect to any Gemini Live audio model."
-            )
-            await websocket.send_json({"type": "error", "message": message})
-            await websocket.close()
-            return
-
+    try:
+        await websocket.send_json({
+            "type": "status",
+            "message": "connected",
+            "assistant": "VayuVani",
+            "voice_model": connected_model,
+        })
+        await _bridge_voice_session(websocket, session)
+    except _BrowserDisconnected:
+        logger.info("VayuVani Live Client Disconnected cleanly.")
+    except Exception as error:
+        rate_limited = is_rate_limit_error(error)
+        logger.error(
+            "VayuVani Live Session failed with %s.",
+            type(error).__name__,
+            exc_info=True,
+        )
         try:
             await websocket.send_json({
-                "type": "status",
-                "message": "connected",
-                "assistant": "VayuVani",
-                "voice_model": connected_model,
+                "type": "error",
+                "message": (
+                    "The configured Gemini API key is rate limited. Try again later."
+                    if rate_limited
+                    else "The VayuVani live session ended unexpectedly. Please try again."
+                ),
             })
-            await _bridge_voice_session(websocket, session)
-        except _BrowserDisconnected:
-            logger.info("VayuVani Live Client Disconnected cleanly.")
-            return
-        except Exception as error:
-            if key_ring.advance_for(error):
-                logger.warning(
-                    "Gemini key %d/%d was rate limited during a live session; switching keys.",
-                    key_ring.position - 1,
-                    key_ring.size,
-                )
-                try:
-                    await websocket.send_json({
-                        "type": "status",
-                        "message": "switching_rate_limited_key",
-                    })
-                except Exception:
-                    return
-                continue
-
-            rate_limited = is_rate_limit_error(error)
-            logger.error(
-                "VayuVani Live Session failed with %s.",
-                type(error).__name__,
-            )
-            try:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": (
-                        "All configured Gemini API keys are rate limited. Try again later."
-                        if rate_limited
-                        else "The VayuVani live session ended unexpectedly. Please try again."
-                    ),
-                })
-                await websocket.close()
-            except Exception:
-                pass
-            return
-        finally:
-            try:
-                await session_context.__aexit__(None, None, None)
-            except Exception:
-                pass
+            await websocket.close()
+        except Exception:
+            pass
+    finally:
+        try:
+            await session_context.__aexit__(None, None, None)
+        except Exception:
+            pass

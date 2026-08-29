@@ -20,7 +20,6 @@ export default function JarvisVoiceWidget() {
 
   return (
     <div className={styles.voiceWidget} role="region" aria-label="VayuVani Voice Co-Pilot">
-      {/* Fluid Glowing Voice Orb - Enlarages on click and glows/flows organically */}
       <button
         type="button"
         className={styles.orbButton}
@@ -34,30 +33,18 @@ export default function JarvisVoiceWidget() {
           <div className={`${styles.fluidWave} ${styles.wave1}`} aria-hidden="true" />
           <div className={`${styles.fluidWave} ${styles.wave2}`} aria-hidden="true" />
 
-          {/* Dynamic Mic / Soundwave Icon */}
-          <svg className={styles.micIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {isSpeaking ? (
-              <>
-                <path d="M2 10v4" />
-                <path d="M6 6v12" />
-                <path d="M10 3v18" />
-                <path d="M14 7v10" />
-                <path d="M18 5v14" />
-                <path d="M22 10v4" />
-              </>
-            ) : isRecording ? (
-              <>
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </>
-            ) : (
-              <>
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </>
-            )}
+          <svg className={styles.voiceMicIcon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="voice-mic-gradient" x1="5" y1="2" x2="19" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#00c7ff" />
+                <stop offset="0.34" stopColor="#5856d6" />
+                <stop offset="0.7" stopColor="#bf5af2" />
+                <stop offset="1" stopColor="#ff375f" />
+              </linearGradient>
+            </defs>
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="url(#voice-mic-gradient)" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="url(#voice-mic-gradient)" />
+            <line x1="12" x2="12" y1="19" y2="22" stroke="url(#voice-mic-gradient)" />
           </svg>
         </div>
       </button>

@@ -5,7 +5,7 @@ import { useJarvisVoice } from '@/hooks/useJarvisVoice';
 import styles from './jarvis-voice.module.css';
 
 export default function JarvisVoiceWidget() {
-  const { isRecording, isSpeaking, startListening, stopListening } = useJarvisVoice();
+  const { isRecording, isSpeaking, voiceError, startListening, stopListening } = useJarvisVoice();
 
   // Determine current interaction state
   const state = isSpeaking ? 'speaking' : isRecording ? 'listening' : 'idle';
@@ -20,6 +20,11 @@ export default function JarvisVoiceWidget() {
 
   return (
     <div className={styles.voiceWidget} role="region" aria-label="VayuVani Voice Co-Pilot">
+      {voiceError ? (
+        <div id="vayuvani-error" className={styles.voiceError} role="alert">
+          {voiceError}
+        </div>
+      ) : null}
       <button
         type="button"
         className={styles.orbButton}
@@ -27,6 +32,7 @@ export default function JarvisVoiceWidget() {
         onClick={handleToggle}
         title={isRecording ? 'Tap to pause VayuVani' : 'Tap to speak with VayuVani AI'}
         aria-label={isRecording ? 'Stop voice interaction' : 'Start voice interaction with VayuVani'}
+        aria-describedby={voiceError ? 'vayuvani-error' : undefined}
       >
         <div className={styles.orbAura} aria-hidden="true" />
         <div className={styles.orbCore}>

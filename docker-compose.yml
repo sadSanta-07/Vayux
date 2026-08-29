@@ -8,6 +8,7 @@ services:
       ATMOSPHERIC_ENGINE_URL: http://backend:8000
       DATABASE_URL: postgresql://vayux:vayux@postgres:5432/vayux
       DATA_GOV_IN_API_KEY: ${DATA_GOV_IN_API_KEY:-}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
       NEXT_TELEMETRY_DISABLED: "1"
       WATCHPACK_POLLING: "true"
     ports:
@@ -53,6 +54,7 @@ services:
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       NASA_FIRMS_KEY: ${NASA_FIRMS_KEY:-}
     ports:
       - "8000:8000"

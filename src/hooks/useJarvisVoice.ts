@@ -5,6 +5,24 @@ interface UseJarvisVoiceOptions {
   onTranscript?: (text: string) => void;
 }
 
+function getMicrophoneErrorMessage(error: unknown): string {
+  const errorName = error instanceof Error ? error.name : "";
+
+  if (errorName === "NotAllowedError" || errorName === "SecurityError") {
+    return "Microphone permission was denied. Allow access in your browser settings and try again.";
+  }
+
+  if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+    return "No microphone was found on this device.";
+  }
+
+  if (errorName === "NotReadableError" || errorName === "TrackStartError") {
+    return "Your microphone is busy in another app. Close it there and try again.";
+  }
+
+  return "Unable to start the microphone. Check your browser permissions and try again.";
+}
+
 /**
  * High-quality linear downsampling filter to convert browser microphone
  * audio (typically 44.1kHz or 48kHz) to 16kHz 16-bit PCM expected by Gemini Live.
@@ -42,6 +60,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [activeVoiceModel, setActiveVoiceModel] = useState<string>('gemini-2.5-flash-native-audio-latest');
   const [activeReasoningModel, setActiveReasoningModel] = useState<string>('gemini-3.7-flash');
 
@@ -56,6 +75,22 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const isPlayingRef = useRef(false);
   const nextPlayTimeRef = useRef<number>(0);
   const activeSourcesCountRef = useRef<number>(0);
+
+  const releaseMicrophone = useCallback(() => {
+    processorRef.current?.disconnect();
+    micSourceRef.current?.disconnect();
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+    processorRef.current = null;
+    micSourceRef.current = null;
+    mediaStreamRef.current = null;
+
+    if (micContextRef.current && micContextRef.current.state !== 'closed') {
+      void micContextRef.current.close();
+    }
+    micContextRef.current = null;
+    setIsRecording(false);
+  }, []);
 
   // Fetch best reasoning model for background cognitive tasks on mount
   useEffect(() => {
@@ -129,10 +164,17 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
-    ws.onopen = () => setIsConnected(true);
+    ws.onopen = () => {
+      setIsConnected(true);
+      setVoiceError(null);
+    };
+    ws.onerror = () => {
+      setVoiceError("Unable to connect to VayuVani. Check the voice server and try again.");
+      releaseMicrophone();
+    };
     ws.onclose = () => {
       setIsConnected(false);
-      setIsRecording(false);
+      releaseMicrophone();
       setIsSpeaking(false);
       isPlayingRef.current = false;
       activeSourcesCountRef.current = 0;
@@ -149,6 +191,10 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
           if (msg.type === 'transcript') {
             setTranscript((prev) => (prev ? prev + ' ' + msg.text : msg.text));
             options.onTranscript?.(msg.text);
+          }
+          if (msg.type === 'error') {
+            setVoiceError(msg.message || "VayuVani could not start a voice session.");
+            releaseMicrophone();
           }
           if (msg.type === 'turn_complete') {
             if (activeSourcesCountRef.current === 0) {
@@ -172,10 +218,20 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     };
 
     wsRef.current = ws;
-  }, [wsUrl, options, scheduleAudioChunk]);
+  }, [wsUrl, options, releaseMicrophone, scheduleAudioChunk]);
 
   const startListening = async () => {
-    connect();
+    setVoiceError(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setVoiceError(
+        window.isSecureContext
+          ? "Microphone access is not supported by this browser."
+          : "Microphone access requires HTTPS or localhost. Open VayuX from a secure URL and try again."
+      );
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -186,6 +242,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
         }
       });
       mediaStreamRef.current = stream;
+      connect();
 
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
@@ -215,20 +272,13 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       processorRef.current = processor;
       setIsRecording(true);
     } catch (err) {
-      console.error('Failed to access microphone:', err);
+      releaseMicrophone();
+      setVoiceError(getMicrophoneErrorMessage(err));
     }
   };
 
   const stopListening = () => {
-    processorRef.current?.disconnect();
-    micSourceRef.current?.disconnect();
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    
-    if (micContextRef.current && micContextRef.current.state !== 'closed') {
-      micContextRef.current.close();
-    }
-    
-    setIsRecording(false);
+    releaseMicrophone();
     setIsSpeaking(false);
     isPlayingRef.current = false;
     activeSourcesCountRef.current = 0;
@@ -258,6 +308,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     isRecording,
     isSpeaking,
     transcript,
+    voiceError,
     activeVoiceModel,
     activeReasoningModel,
     startListening,
